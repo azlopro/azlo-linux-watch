@@ -22,17 +22,50 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build linux/amd64
+      - name: Build binaries
         run: |
-          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o azlo-linux-watch-amd64 .
+          GOOS=linux GOARCH=amd64 go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+            -o azlo-linux-watch-amd64 .
+          GOOS=linux GOARCH=arm64 go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
+            -o azlo-linux-watch-arm64 .
 
-      - name: Build linux/arm64
+      - name: Install nFPM
         run: |
-          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o azlo-linux-watch-arm64 .
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_amd64.deb \
+            -o /tmp/nfpm.deb
+          sudo dpkg -i /tmp/nfpm.deb
+
+      - name: Build packages
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          for ARCH in amd64 arm64; do
+            export ARCH
+            # .deb (apt/dpkg)
+            nfpm package --config nfpm.yaml --packager deb \
+              --target "azlo-linux-watch_${VERSION}_linux_${ARCH}.deb"
+            # .rpm (dnf/yum/zypper)
+            nfpm package --config nfpm.yaml --packager rpm \
+              --target "azlo-linux-watch_${VERSION}_linux_${ARCH}.rpm"
+            # .pkg.tar.zst (pacman/yay)
+            nfpm package --config nfpm.yaml --packager archlinux \
+              --target "azlo-linux-watch_${VERSION}_linux_${ARCH}.pkg.tar.zst"
+          done
 
       - name: Create checksums
         run: |
-          sha256sum azlo-linux-watch-amd64 azlo-linux-watch-arm64 > checksums.txt
+          sha256sum \
+            azlo-linux-watch-amd64 \
+            azlo-linux-watch-arm64 \
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.deb \
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.deb \
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.rpm \
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.rpm \
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.pkg.tar.zst \
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.pkg.tar.zst \
+            > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -41,5 +74,11 @@ jobs:
           files: |
             azlo-linux-watch-amd64
             azlo-linux-watch-arm64
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.deb
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.deb
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.rpm
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.rpm
+            azlo-linux-watch_${{ github.ref_name }}_linux_amd64.pkg.tar.zst
+            azlo-linux-watch_${{ github.ref_name }}_linux_arm64.pkg.tar.zst
             checksums.txt
           generate_release_notes: true

@@ -1,0 +1,38 @@
+name: azlo-linux-watch
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+maintainer: azlopro <noreply@github.com>
+description: |
+  Monitors Linux user logins and logouts, sending real-time
+  alerts to a Discord webhook via a hardened systemd service.
+homepage: https://github.com/azlopro/azlo-linux-watch
+license: MIT
+
+contents:
+  - src: azlo-linux-watch-${ARCH}
+    dst: /opt/azlo-linux-watch/azlo-linux-watch
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+  - src: azlo-linux-watch.service
+    dst: /usr/lib/systemd/system/azlo-linux-watch.service
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+  # Config file — never overwritten on upgrade if already edited
+  - src: packaging/env.template
+    dst: /etc/azlo-linux-watch/env
+    type: config|noreplace
+    file_info:
+      mode: 0600
+      owner: root
+      group: root
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
