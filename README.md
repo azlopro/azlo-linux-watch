@@ -37,7 +37,8 @@ The installer will:
 3. Download the correct pre-built binary for your architecture from GitHub Releases
 4. Verify the SHA-256 checksum before installing
 5. Install the binary to `/opt/azlo-linux-watch/azlo-linux-watch`
-6. Install and enable the systemd service
+6. **Prompt for your Discord webhook URL** and save it to `/etc/azlo-linux-watch/env` (`600 root:root`)
+7. Install and enable the systemd service
 
 ### 3 — Verify it's running
 
@@ -67,6 +68,7 @@ journalctl -u azlo-linux-watch -f
 |------|-------------|
 | `/opt/azlo-linux-watch/azlo-linux-watch` | Binary |
 | `/etc/systemd/system/azlo-linux-watch.service` | Systemd service unit |
+| `/etc/azlo-linux-watch/env` | Environment file containing the webhook URL |
 
 ### System user
 
@@ -74,6 +76,18 @@ A dedicated system user `azlo-watch` is created with:
 - No login shell (`/usr/sbin/nologin`)
 - No home directory
 - Membership of the `utmp` group (required to read login sessions)
+
+### Webhook configuration
+
+The Discord webhook URL is stored in `/etc/azlo-linux-watch/env` with permissions `600 root:root`. It is injected into the process by systemd via `EnvironmentFile=` — the service user never has direct access to the file.
+
+To update the webhook URL after install:
+
+```bash
+sudo nano /etc/azlo-linux-watch/env
+# Edit the DISCORD_WEBHOOK_URL= line, save, then:
+sudo systemctl restart azlo-linux-watch
+```
 
 ---
 
@@ -130,6 +144,7 @@ journalctl -u azlo-linux-watch -n 100
 sudo systemctl disable --now azlo-linux-watch
 sudo rm /etc/systemd/system/azlo-linux-watch.service
 sudo rm -rf /opt/azlo-linux-watch
+sudo rm -rf /etc/azlo-linux-watch
 sudo userdel azlo-watch
 sudo systemctl daemon-reload
 ```

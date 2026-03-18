@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=simple
 User=azlo-watch
 Group=utmp
+EnvironmentFile=/etc/azlo-linux-watch/env
 ExecStart=/opt/azlo-linux-watch/azlo-linux-watch
 Restart=on-failure
 RestartSec=10

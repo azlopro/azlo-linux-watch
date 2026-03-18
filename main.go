@@ -15,8 +15,6 @@ import (
 // version is set at build time via -ldflags "-X main.version=vX.Y.Z"
 var version = "dev"
 
-const webhookURL = "https://discord.com/api/webhooks/1483923699563233291/JUzPyfi7iePC1ghNk9ogq7Rr1_IBngmX3CZTHOn8wQG9qcFj956CP4fmVLuCTeOQVHSp"
-
 type DiscordEmbed struct {
 	Title       string         `json:"title"`
 	Description string         `json:"description"`
@@ -90,7 +88,7 @@ func parseWho(output string) map[string]LoginEvent {
 	return sessions
 }
 
-func sendDiscordAlert(event LoginEvent) {
+func sendDiscordAlert(webhookURL string, event LoginEvent) {
 	hostname := getHostname()
 
 	color := 0x2ECC71 // green for login
@@ -143,6 +141,11 @@ func main() {
 	fmt.Printf("azlo-linux-watch %s started — monitoring logins\n", version)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
+	webhookURL := os.Getenv("DISCORD_WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Fatal("DISCORD_WEBHOOK_URL environment variable is not set")
+	}
+
 	// Send startup notification
 	hostname := getHostname()
 	startEmbed := DiscordEmbed{
@@ -178,7 +181,7 @@ func main() {
 		for tty, ev := range current {
 			if _, exists := known[tty]; !exists {
 				ev.Action = "login"
-				sendDiscordAlert(ev)
+				sendDiscordAlert(webhookURL, ev)
 			}
 		}
 
@@ -186,7 +189,7 @@ func main() {
 		for tty, ev := range known {
 			if _, exists := current[tty]; !exists {
 				ev.Action = "logout"
-				sendDiscordAlert(ev)
+				sendDiscordAlert(webhookURL, ev)
 			}
 		}
 

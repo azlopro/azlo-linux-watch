@@ -11,6 +11,8 @@ INSTALL_PATH="${INSTALL_DIR}/${BIN_NAME}"
 SERVICE_NAME="${BIN_NAME}.service"
 SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}"
 SERVICE_USER="azlo-watch"
+ENV_DIR="/etc/${BIN_NAME}"
+ENV_FILE="${ENV_DIR}/env"
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 info()  { echo "[INFO]  $*"; }
@@ -92,6 +94,20 @@ info "Installing binary to ${INSTALL_PATH}"
 mv "/tmp/${ASSET}" "${INSTALL_PATH}"
 chown root:root "${INSTALL_PATH}"
 chmod 755 "${INSTALL_PATH}"
+
+# ── write env file ────────────────────────────────────────────────────────────
+if [ -f "${ENV_FILE}" ] && grep -q "DISCORD_WEBHOOK_URL=" "${ENV_FILE}"; then
+  info "Existing webhook config found at ${ENV_FILE} — skipping prompt"
+else
+  echo ""
+  read -r -p "Paste your Discord webhook URL: " WEBHOOK_URL
+  [ -n "$WEBHOOK_URL" ] || error "Webhook URL cannot be empty"
+  mkdir -p "${ENV_DIR}"
+  printf 'DISCORD_WEBHOOK_URL=%s\n' "${WEBHOOK_URL}" > "${ENV_FILE}"
+  chown root:root "${ENV_FILE}"
+  chmod 600 "${ENV_FILE}"
+  info "Webhook URL saved to ${ENV_FILE} (permissions: 600 root:root)"
+fi
 
 # ── install service ────────────────────────────────────────────────────────────
 info "Installing systemd service to ${SERVICE_DEST}"
