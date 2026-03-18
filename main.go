@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z"
+var version = "dev"
+
 const webhookURL = "https://discord.com/api/webhooks/1483923699563233291/JUzPyfi7iePC1ghNk9ogq7Rr1_IBngmX3CZTHOn8wQG9qcFj956CP4fmVLuCTeOQVHSp"
 
 type DiscordEmbed struct {
@@ -64,7 +67,7 @@ func getWhoOutput() (string, error) {
 // parseWho parses `who -u` output into a map of tty -> LoginEvent
 func parseWho(output string) map[string]LoginEvent {
 	sessions := make(map[string]LoginEvent)
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 5 {
 			continue
@@ -111,7 +114,7 @@ func sendDiscordAlert(event LoginEvent) {
 			{Name: "TTY", Value: event.TTY, Inline: true},
 			{Name: "From", Value: from, Inline: true},
 		},
-		Footer:    &EmbedFooter{Text: "azlo-linux-watch"},
+		Footer:    &EmbedFooter{Text: "azlo-linux-watch " + version},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -137,7 +140,7 @@ func sendDiscordAlert(event LoginEvent) {
 }
 
 func main() {
-	fmt.Println("azlo-linux-watch started — monitoring logins")
+	fmt.Printf("azlo-linux-watch %s started — monitoring logins\n", version)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	// Send startup notification
@@ -146,7 +149,7 @@ func main() {
 		Title:       "Login Monitor Started",
 		Description: fmt.Sprintf("Now watching logins on **%s**", hostname),
 		Color:       0x3498DB,
-		Footer:      &EmbedFooter{Text: "azlo-linux-watch"},
+		Footer:      &EmbedFooter{Text: "azlo-linux-watch " + version},
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
 	startPayload := DiscordPayload{Embeds: []DiscordEmbed{startEmbed}}

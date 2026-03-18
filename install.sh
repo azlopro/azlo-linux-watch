@@ -1,20 +1,49 @@
 #!/usr/bin/env bash
-set -e
+# install.sh — download the latest azlo-linux-watch release and install as a systemd service
+set -euo pipefail
 
-BIN=/usr/local/bin/azlo-linux-watch
-SERVICE=/etc/systemd/system/azlo-linux-watch.service
+REPO="azlopro/azlo-linux-watch"
+BIN_NAME="azlo-linux-watch"
+INSTALL_PATH="/usr/local/bin/${BIN_NAME}"
+SERVICE_SRC="$(dirname "$0")/azlo-linux-watch.service"
+SERVICE_DEST="/etc/systemd/system/${BIN_NAME}.service"
 
-echo "Building..."
-go build -o azlo-linux-watch .
+# Detect architecture
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64)  ARCH_SUFFIX="amd64" ;;
+  aarch64) ARCH_SUFFIX="arm64" ;;
+  *)
+    echo "Unsupported architecture: $ARCH" >&2
+    exit 1
+    ;;
+esac
 
-echo "Installing binary to $BIN"
-sudo cp azlo-linux-watch "$BIN"
-sudo chmod 755 "$BIN"
+ASSET="${BIN_NAME}-${ARCH_SUFFIX}"
 
-echo "Installing systemd service"
-sudo cp azlo-linux-watch.service "$SERVICE"
+echo "Fetching latest release from github.com/${REPO}..."
+RELEASE_URL=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+  | grep "browser_download_url" \
+  | grep "${ASSET}" \
+  | cut -d '"' -f 4)
+
+if [ -z "$RELEASE_URL" ]; then
+  echo "Could not find release asset '${ASSET}'. Check https://github.com/${REPO}/releases" >&2
+  exit 1
+fi
+
+echo "Downloading ${ASSET} from ${RELEASE_URL}..."
+curl -fsSL "$RELEASE_URL" -o "/tmp/${BIN_NAME}"
+chmod +x "/tmp/${BIN_NAME}"
+
+echo "Installing binary to ${INSTALL_PATH}..."
+sudo mv "/tmp/${BIN_NAME}" "$INSTALL_PATH"
+
+echo "Installing systemd service to ${SERVICE_DEST}..."
+sudo cp "$SERVICE_SRC" "$SERVICE_DEST"
 sudo systemctl daemon-reload
-sudo systemctl enable --now azlo-linux-watch
+sudo systemctl enable --now "${BIN_NAME}"
 
-echo "Done. Status:"
-sudo systemctl status azlo-linux-watch --no-pager
+echo ""
+echo "Done! Service status:"
+sudo systemctl status "${BIN_NAME}" --no-pager
