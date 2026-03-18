@@ -1,49 +1,112 @@
 #!/usr/bin/env bash
-# install.sh — download the latest azlo-linux-watch release and install as a systemd service
+# install.sh — production installer for azlo-linux-watch
+# Downloads the latest release binary and sets up a hardened systemd service.
+# Must be run as root or via sudo.
 set -euo pipefail
 
 REPO="azlopro/azlo-linux-watch"
 BIN_NAME="azlo-linux-watch"
-INSTALL_PATH="/usr/local/bin/${BIN_NAME}"
-SERVICE_SRC="$(dirname "$0")/azlo-linux-watch.service"
-SERVICE_DEST="/etc/systemd/system/${BIN_NAME}.service"
+INSTALL_DIR="/opt/${BIN_NAME}"
+INSTALL_PATH="${INSTALL_DIR}/${BIN_NAME}"
+SERVICE_NAME="${BIN_NAME}.service"
+SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}"
+SERVICE_USER="azlo-watch"
 
-# Detect architecture
-ARCH="$(uname -m)"
-case "$ARCH" in
-  x86_64)  ARCH_SUFFIX="amd64" ;;
-  aarch64) ARCH_SUFFIX="arm64" ;;
-  *)
-    echo "Unsupported architecture: $ARCH" >&2
-    exit 1
-    ;;
-esac
+# ── helpers ────────────────────────────────────────────────────────────────────
+info()  { echo "[INFO]  $*"; }
+error() { echo "[ERROR] $*" >&2; exit 1; }
 
-ASSET="${BIN_NAME}-${ARCH_SUFFIX}"
+require_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    error "This script must be run as root. Try: sudo $0"
+  fi
+}
 
-echo "Fetching latest release from github.com/${REPO}..."
-RELEASE_URL=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-  | grep "browser_download_url" \
-  | grep "${ASSET}" \
-  | cut -d '"' -f 4)
+# ── detect architecture ────────────────────────────────────────────────────────
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64)  echo "amd64" ;;
+    aarch64) echo "arm64" ;;
+    *)       error "Unsupported architecture: $(uname -m)" ;;
+  esac
+}
 
-if [ -z "$RELEASE_URL" ]; then
-  echo "Could not find release asset '${ASSET}'. Check https://github.com/${REPO}/releases" >&2
-  exit 1
+# ── fetch latest release asset URL ────────────────────────────────────────────
+fetch_release_url() {
+  local asset="$1"
+  local url
+  url=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+    | grep "browser_download_url" \
+    | grep "${asset}\"" \
+    | cut -d '"' -f 4)
+  [ -n "$url" ] || error "Could not find release asset '${asset}'. Check https://github.com/${REPO}/releases"
+  echo "$url"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+require_root
+
+ARCH=$(detect_arch)
+ASSET="${BIN_NAME}-${ARCH}"
+
+info "Installing azlo-linux-watch for linux/${ARCH}"
+
+# ── create system user ─────────────────────────────────────────────────────────
+if ! id "${SERVICE_USER}" &>/dev/null; then
+  info "Creating system user '${SERVICE_USER}'"
+  useradd \
+    --system \
+    --no-create-home \
+    --shell /usr/sbin/nologin \
+    --comment "azlo-linux-watch daemon" \
+    "${SERVICE_USER}"
+else
+  info "System user '${SERVICE_USER}' already exists"
 fi
 
-echo "Downloading ${ASSET} from ${RELEASE_URL}..."
-curl -fsSL "$RELEASE_URL" -o "/tmp/${BIN_NAME}"
-chmod +x "/tmp/${BIN_NAME}"
+# ── create install directory ───────────────────────────────────────────────────
+info "Creating ${INSTALL_DIR}"
+mkdir -p "${INSTALL_DIR}"
+chown root:root "${INSTALL_DIR}"
+chmod 755 "${INSTALL_DIR}"
 
-echo "Installing binary to ${INSTALL_PATH}..."
-sudo mv "/tmp/${BIN_NAME}" "$INSTALL_PATH"
+# ── download binary ────────────────────────────────────────────────────────────
+info "Fetching latest release from github.com/${REPO}"
+RELEASE_URL=$(fetch_release_url "${ASSET}")
 
-echo "Installing systemd service to ${SERVICE_DEST}..."
-sudo cp "$SERVICE_SRC" "$SERVICE_DEST"
-sudo systemctl daemon-reload
-sudo systemctl enable --now "${BIN_NAME}"
+CHECKSUM_URL=$(fetch_release_url "checksums.txt")
 
+info "Downloading ${ASSET}"
+curl -fsSL "${RELEASE_URL}" -o "/tmp/${BIN_NAME}"
+curl -fsSL "${CHECKSUM_URL}" -o "/tmp/checksums.txt"
+
+info "Verifying checksum"
+pushd /tmp >/dev/null
+grep "${ASSET}" checksums.txt | sha256sum --check --status \
+  || error "Checksum verification failed! Aborting."
+popd >/dev/null
+info "Checksum OK"
+
+# ── install binary ─────────────────────────────────────────────────────────────
+info "Installing binary to ${INSTALL_PATH}"
+mv "/tmp/${BIN_NAME}" "${INSTALL_PATH}"
+chown root:root "${INSTALL_PATH}"
+chmod 755 "${INSTALL_PATH}"
+
+# ── install service ────────────────────────────────────────────────────────────
+info "Installing systemd service to ${SERVICE_DEST}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cp "${SCRIPT_DIR}/${SERVICE_NAME}" "${SERVICE_DEST}"
+chown root:root "${SERVICE_DEST}"
+chmod 644 "${SERVICE_DEST}"
+
+systemctl daemon-reload
+systemctl enable --now "${BIN_NAME}"
+
+# ── done ───────────────────────────────────────────────────────────────────────
 echo ""
-echo "Done! Service status:"
-sudo systemctl status "${BIN_NAME}" --no-pager
+info "Installation complete!"
+echo ""
+systemctl status "${BIN_NAME}" --no-pager
+echo ""
+info "View logs with: journalctl -u ${BIN_NAME} -f"
