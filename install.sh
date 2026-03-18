@@ -77,7 +77,7 @@ RELEASE_URL=$(fetch_release_url "${ASSET}")
 CHECKSUM_URL=$(fetch_release_url "checksums.txt")
 
 info "Downloading ${ASSET}"
-curl -fsSL "${RELEASE_URL}" -o "/tmp/${BIN_NAME}"
+curl -fsSL "${RELEASE_URL}" -o "/tmp/${ASSET}"
 curl -fsSL "${CHECKSUM_URL}" -o "/tmp/checksums.txt"
 
 info "Verifying checksum"
@@ -89,7 +89,7 @@ info "Checksum OK"
 
 # ── install binary ─────────────────────────────────────────────────────────────
 info "Installing binary to ${INSTALL_PATH}"
-mv "/tmp/${BIN_NAME}" "${INSTALL_PATH}"
+mv "/tmp/${ASSET}" "${INSTALL_PATH}"
 chown root:root "${INSTALL_PATH}"
 chmod 755 "${INSTALL_PATH}"
 
