@@ -45,14 +45,20 @@ fetch_latest_version() {
     | grep '"tag_name"' | cut -d '"' -f 4
 }
 
-# ── fetch a release asset URL by filename pattern ────────────────────────────
+# ── fetch a release asset URL by filename pattern (empty string if not found) ─
 fetch_release_url() {
   local asset="$1"
-  local url
-  url=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+  curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep "browser_download_url" \
     | grep "\"${asset}\"" \
-    | cut -d '"' -f 4)
+    | cut -d '"' -f 4
+}
+
+# ── same but exits on failure ─────────────────────────────────────────────────
+require_release_url() {
+  local asset="$1"
+  local url
+  url=$(fetch_release_url "${asset}")
   [ -n "$url" ] || error "Could not find release asset '${asset}'. Check https://github.com/${REPO}/releases"
   echo "$url"
 }
@@ -61,8 +67,8 @@ fetch_release_url() {
 download_and_verify() {
   local asset="$1"
   info "Downloading ${asset}"
-  curl -fsSL "$(fetch_release_url "${asset}")" -o "/tmp/${asset}"
-  curl -fsSL "$(fetch_release_url "checksums.txt")" -o "/tmp/checksums.txt"
+  curl -fsSL "$(require_release_url "${asset}")" -o "/tmp/${asset}"
+  curl -fsSL "$(require_release_url "checksums.txt")" -o "/tmp/checksums.txt"
   info "Verifying checksum"
   pushd /tmp >/dev/null
   grep " ${asset}$" checksums.txt | sha256sum --check --status \
@@ -158,13 +164,31 @@ info "Detected package manager: ${PKGMGR}"
 
 case "${PKGMGR}" in
   apt)
-    install_deb
+    PKG_ASSET="${BIN_NAME}_${VERSION}_linux_${ARCH}.deb"
+    if [ -n "$(fetch_release_url "${PKG_ASSET}")" ]; then
+      install_deb
+    else
+      info "Package ${PKG_ASSET} not in release yet — falling back to raw binary"
+      install_binary "${ARCH}"
+    fi
     ;;
   dnf|yum|zypper)
-    install_rpm
+    PKG_ASSET="${BIN_NAME}_${VERSION}_linux_${ARCH}.rpm"
+    if [ -n "$(fetch_release_url "${PKG_ASSET}")" ]; then
+      install_rpm
+    else
+      info "Package ${PKG_ASSET} not in release yet — falling back to raw binary"
+      install_binary "${ARCH}"
+    fi
     ;;
   pacman)
-    install_pacman
+    PKG_ASSET="${BIN_NAME}_${VERSION}_linux_${ARCH}.pkg.tar.zst"
+    if [ -n "$(fetch_release_url "${PKG_ASSET}")" ]; then
+      install_pacman
+    else
+      info "Package ${PKG_ASSET} not in release yet — falling back to raw binary"
+      install_binary "${ARCH}"
+    fi
     ;;
   none)
     info "No supported package manager found — falling back to raw binary install"
