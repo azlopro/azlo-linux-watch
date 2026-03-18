@@ -40,6 +40,8 @@ jobs:
         run: |
           for ARCH in amd64 arm64; do
             export ARCH
+            # Stage binary under a fixed name so nFPM can find it
+            cp "azlo-linux-watch-${ARCH}" azlo-linux-watch-pkg
             # .deb (apt/dpkg)
             nfpm package --config nfpm.yaml --packager deb \
               --target "azlo-linux-watch_${VERSION}_linux_${ARCH}.deb"
@@ -49,6 +51,7 @@ jobs:
             # .pkg.tar.zst (pacman/yay)
             nfpm package --config nfpm.yaml --packager archlinux \
               --target "azlo-linux-watch_${VERSION}_linux_${ARCH}.pkg.tar.zst"
+            rm azlo-linux-watch-pkg
           done
 
       - name: Create checksums

@@ -10,7 +10,7 @@ homepage: https://github.com/azlopro/azlo-linux-watch
 license: MIT
 
 contents:
-  - src: azlo-linux-watch-${ARCH}
+  - src: azlo-linux-watch-pkg
     dst: /opt/azlo-linux-watch/azlo-linux-watch
     file_info:
       mode: 0755
