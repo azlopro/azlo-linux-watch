@@ -50,7 +50,7 @@ fetch_release_url() {
   local asset="$1"
   curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep "browser_download_url" \
-    | grep "\"${asset}\"" \
+    | grep "/${asset}\"" \
     | cut -d '"' -f 4
 }
 
