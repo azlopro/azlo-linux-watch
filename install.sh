@@ -117,7 +117,14 @@ chown root:root "${SERVICE_DEST}"
 chmod 644 "${SERVICE_DEST}"
 
 systemctl daemon-reload
-systemctl enable --now "${BIN_NAME}"
+systemctl enable "${BIN_NAME}"
+if systemctl is-active --quiet "${BIN_NAME}"; then
+  info "Restarting ${BIN_NAME}"
+  systemctl restart "${BIN_NAME}"
+else
+  info "Starting ${BIN_NAME}"
+  systemctl start "${BIN_NAME}"
+fi
 
 # ── done ───────────────────────────────────────────────────────────────────────
 echo ""
