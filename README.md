@@ -47,9 +47,33 @@ All features can be individually enabled/disabled via the `FEATURES` environment
 
 ## Production Install
 
-### Option A — Package manager (recommended)
+### Option A — Debian / Ubuntu APT Repository (Recommended)
 
-The installer auto-detects your package manager and installs a native package (`.deb`, `.rpm`, or `.pkg.tar.zst`). This means you can update with your normal system tools.
+azlo-linux-watch provides a native APT repository hosted on GitHub Pages. This is the best way to install and keep the monitor updated on Debian and Ubuntu systems.
+
+```bash
+# 1. Add the APT repository
+echo "deb [trusted=yes] https://azlopro.github.io/azlo-linux-watch/apt stable main" | sudo tee /etc/apt/sources.list.d/azlo-linux-watch.list
+
+# 2. Update and install
+sudo apt update
+sudo apt install azlo-linux-watch
+
+# 3. Configure your Discord webhook
+sudo nano /etc/azlo-linux-watch/env     # set DISCORD_WEBHOOK_URL=
+
+# 4. Start the service
+sudo systemctl enable --now azlo-linux-watch
+```
+
+**Updates:** You will receive future updates automatically when running standard system upgrades:
+```bash
+sudo apt update && sudo apt upgrade azlo-linux-watch
+```
+
+### Option B — Universal Installer Script
+
+The interactive installer auto-detects your package manager and installs a native package (`.deb`, `.rpm`, or `.pkg.tar.zst`). On Debian/Ubuntu systems, it also automatically configures the APT repository for you.
 
 ```bash
 git clone https://github.com/azlopro/azlo-linux-watch.git
@@ -58,23 +82,19 @@ sudo ./install.sh
 ```
 
 The installer will:
-
 1. Detect your package manager (`apt`, `dnf`, `yum`, `zypper`, or `pacman`)
-2. Download the correct package and verify its SHA-256 checksum
-3. Install via your package manager (registers it for `apt upgrade`, `pacman -Syu`, etc.)
-4. **Prompt for your Discord webhook URL** and save it to `/etc/azlo-linux-watch/env` (`600 root:root`)
-5. Create the `azlo-watch` system user with `utmp` + `adm` groups
-6. Install the PAM hook for instant SSH login detection
-7. Enable and start the systemd service
+2. Download and install the latest package (registers it for `apt upgrade`, `pacman -Syu`, etc.)
+3. Prompts for your Discord webhook URL and saves it to `/etc/azlo-linux-watch/env`
+4. Enable the service, install the PAM hook, and add the required system user.
 
-### Option B — Manual package install
+### Option C — Manual Download
 
-Download and install the package for your distro directly from [GitHub Releases](https://github.com/azlopro/azlo-linux-watch/releases/latest):
+Download the package for your distro directly from [GitHub Releases](https://github.com/azlopro/azlo-linux-watch/releases/latest):
 
-**Debian / Ubuntu**
+**Arch Linux / Manjaro (via pacman)**
 ```bash
-curl -LO https://github.com/azlopro/azlo-linux-watch/releases/latest/download/azlo-linux-watch_latest_linux_amd64.deb
-sudo dpkg -i azlo-linux-watch_latest_linux_amd64.deb
+curl -LO https://github.com/azlopro/azlo-linux-watch/releases/latest/download/azlo-linux-watch_latest_linux_amd64.pkg.tar.zst
+sudo pacman -U azlo-linux-watch_latest_linux_amd64.pkg.tar.zst
 sudo nano /etc/azlo-linux-watch/env     # set DISCORD_WEBHOOK_URL=
 sudo systemctl start azlo-linux-watch
 ```
@@ -85,29 +105,6 @@ curl -LO https://github.com/azlopro/azlo-linux-watch/releases/latest/download/az
 sudo dnf install ./azlo-linux-watch_latest_linux_amd64.rpm
 sudo nano /etc/azlo-linux-watch/env     # set DISCORD_WEBHOOK_URL=
 sudo systemctl start azlo-linux-watch
-```
-
-**Arch Linux / Manjaro (via pacman)**
-```bash
-curl -LO https://github.com/azlopro/azlo-linux-watch/releases/latest/download/azlo-linux-watch_latest_linux_amd64.pkg.tar.zst
-sudo pacman -U azlo-linux-watch_latest_linux_amd64.pkg.tar.zst
-sudo nano /etc/azlo-linux-watch/env     # set DISCORD_WEBHOOK_URL=
-sudo systemctl start azlo-linux-watch
-```
-
-### Updating
-
-Once installed via a package, update through your normal system tools:
-
-```bash
-# Debian / Ubuntu
-sudo apt update && sudo apt upgrade azlo-linux-watch
-
-# Arch (after re-running install.sh or downloading new .pkg.tar.zst)
-sudo pacman -U azlo-linux-watch_<version>_linux_amd64.pkg.tar.zst
-
-# Or just re-run the installer — it will detect and upgrade
-sudo ./install.sh
 ```
 
 ### Verify it's running
