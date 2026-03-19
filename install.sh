@@ -108,6 +108,7 @@ install_binary() {
       --comment "azlo-linux-watch daemon" "${SERVICE_USER}"
   fi
   getent group utmp &>/dev/null && usermod -aG utmp "${SERVICE_USER}" 2>/dev/null || true
+  getent group adm  &>/dev/null && usermod -aG adm  "${SERVICE_USER}" 2>/dev/null || true
 
   info "Creating ${install_dir}"
   mkdir -p "${install_dir}"
@@ -128,6 +129,27 @@ install_binary() {
   cp "${SCRIPT_DIR}/${BIN_NAME}.service" "${service_dest}"
   chown root:root "${service_dest}"
   chmod 644 "${service_dest}"
+
+  # Install PAM helper script
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ -f "${SCRIPT_DIR}/pam-notify.sh" ]; then
+    info "Installing PAM helper script"
+    cp "${SCRIPT_DIR}/pam-notify.sh" /opt/${BIN_NAME}/pam-notify.sh
+    chmod 755 /opt/${BIN_NAME}/pam-notify.sh
+  fi
+
+  # Install PAM config
+  if [ -d /etc/pam.d ] && [ -f "${SCRIPT_DIR}/packaging/pam-azlo-watch" ]; then
+    info "Installing PAM configuration"
+    cp "${SCRIPT_DIR}/packaging/pam-azlo-watch" /etc/pam.d/azlo-linux-watch
+    chmod 644 /etc/pam.d/azlo-linux-watch
+    # Hook into sshd if not already done
+    if [ -f /etc/pam.d/sshd ] && ! grep -q 'azlo-linux-watch' /etc/pam.d/sshd 2>/dev/null; then
+      echo '# azlo-linux-watch instant login detection' >> /etc/pam.d/sshd
+      echo '@include azlo-linux-watch' >> /etc/pam.d/sshd
+      info "PAM hook added to sshd"
+    fi
+  fi
 }
 
 # ── package manager installs ──────────────────────────────────────────────────

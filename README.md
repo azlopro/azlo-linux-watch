@@ -1,8 +1,37 @@
 # azlo-linux-watch
 
-Monitors Linux user logins and logouts and sends real-time alerts to a Discord webhook.
+Real-time Linux security monitoring with Discord alerts.
 
-Detects SSH and local sessions via `who -u`, polling every 5 seconds. Sends a Discord embed on login, logout, and daemon startup.
+Detects SSH logins/logouts, failed login attempts, brute force attacks, sudo commands, su attempts, SSH key fingerprints, and enriches alerts with IP geolocation data. Sends beautiful Discord embeds for every event.
+
+---
+
+## Features
+
+| Feature | Source | What it catches |
+|---------|--------|----------------|
+| 🔐 **auth.log tailing** | `/var/log/auth.log` | Failed logins, brute force (≥5 in 60s), SSH key fingerprints, sudo commands, su attempts, invalid usernames |
+| 🌍 **IP geolocation** | ip-api.com | Country, city, ISP for every remote IP (with LRU cache + rate limiting) |
+| ⚡ **PAM hook** | `pam_exec` → Unix socket | Instant login/logout detection (zero polling lag) |
+| 👁️ **who polling** | `who -u` | Login/logout detection via 5s polling (fallback) |
+| 🔍 **eBPF tracing** | `sys_enter_execve` | Process spawn monitoring (kernel ≥ 5.x, coming soon) |
+
+All features can be individually enabled/disabled via the `FEATURES` environment variable.
+
+### Discord Alert Types
+
+| Event | Emoji | Color |
+|-------|-------|-------|
+| User login | 🟢 | Green |
+| User logout | 🔴 | Red |
+| Failed login | ⚠️ | Orange |
+| Invalid username | ❌ | Red |
+| Brute force detected | 🚨 | Red |
+| SSH key used | 🔑 | Blue |
+| Sudo command | 🛡️ | Purple |
+| Su attempt | 🔄 | Gold |
+| Process spawn (eBPF) | 🔍 | Teal |
+| Daemon started | 🔵 | Blue |
 
 ---
 
@@ -11,6 +40,7 @@ Detects SSH and local sessions via `who -u`, polling every 5 seconds. Sends a Di
 - Linux (amd64 or arm64)
 - `curl`
 - `systemd`
+- `socat` (for PAM hook — optional)
 - Root / sudo access
 
 ---
@@ -33,7 +63,9 @@ The installer will:
 2. Download the correct package and verify its SHA-256 checksum
 3. Install via your package manager (registers it for `apt upgrade`, `pacman -Syu`, etc.)
 4. **Prompt for your Discord webhook URL** and save it to `/etc/azlo-linux-watch/env` (`600 root:root`)
-5. Enable and start the systemd service
+5. Create the `azlo-watch` system user with `utmp` + `adm` groups
+6. Install the PAM hook for instant SSH login detection
+7. Enable and start the systemd service
 
 ### Option B — Manual package install
 
@@ -78,7 +110,7 @@ sudo pacman -U azlo-linux-watch_<version>_linux_amd64.pkg.tar.zst
 sudo ./install.sh
 ```
 
-### 3 — Verify it's running
+### Verify it's running
 
 ```bash
 sudo systemctl status azlo-linux-watch
@@ -87,15 +119,40 @@ sudo systemctl status azlo-linux-watch
 Expected output:
 
 ```
-● azlo-linux-watch.service - azlo Linux Login Monitor
+● azlo-linux-watch.service - azlo Linux Security Monitor
      Loaded: loaded (/etc/systemd/system/azlo-linux-watch.service; enabled)
      Active: active (running)
 ```
 
-### 4 — Check logs
+### Check logs
 
 ```bash
 journalctl -u azlo-linux-watch -f
+```
+
+---
+
+## Configuration
+
+All configuration is in `/etc/azlo-linux-watch/env`:
+
+```bash
+# Discord webhook URL (required)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+# Comma-separated list of enabled features
+# Available: authlog, geoip, pam, who, ebpf
+FEATURES=authlog,geoip,pam,who,ebpf
+
+# Enable/disable IP geolocation enrichment
+GEOIP_ENABLED=true
+```
+
+To edit:
+
+```bash
+sudo nano /etc/azlo-linux-watch/env
+sudo systemctl restart azlo-linux-watch
 ```
 
 ---
@@ -104,9 +161,12 @@ journalctl -u azlo-linux-watch -f
 
 | Path | Description |
 |------|-------------|
-| `/opt/azlo-linux-watch/azlo-linux-watch` | Binary |
+| `/opt/azlo-linux-watch/azlo-linux-watch` | Main binary |
+| `/opt/azlo-linux-watch/pam-notify.sh` | PAM helper script |
 | `/etc/systemd/system/azlo-linux-watch.service` | Systemd service unit |
-| `/etc/azlo-linux-watch/env` | Environment file containing the webhook URL |
+| `/etc/azlo-linux-watch/env` | Environment / configuration file |
+| `/etc/pam.d/azlo-linux-watch` | PAM configuration drop-in |
+| `/run/azlo-linux-watch/pam.sock` | Unix socket for PAM events (runtime) |
 
 ### System user
 
@@ -114,18 +174,11 @@ A dedicated system user `azlo-watch` is created with:
 - No login shell (`/usr/sbin/nologin`)
 - No home directory
 - Membership of the `utmp` group (required to read login sessions)
+- Membership of the `adm` group (required to read auth.log)
 
 ### Webhook configuration
 
 The Discord webhook URL is stored in `/etc/azlo-linux-watch/env` with permissions `600 root:root`. It is injected into the process by systemd via `EnvironmentFile=` — the service user never has direct access to the file.
-
-To update the webhook URL after install:
-
-```bash
-sudo nano /etc/azlo-linux-watch/env
-# Edit the DISCORD_WEBHOOK_URL= line, save, then:
-sudo systemctl restart azlo-linux-watch
-```
 
 ---
 
@@ -136,19 +189,22 @@ The systemd unit applies the following restrictions:
 | Setting | Effect |
 |---------|--------|
 | `User=azlo-watch` | Runs as an unprivileged system user |
+| `SupplementaryGroups=adm` | Read access to auth.log |
+| `RuntimeDirectory=azlo-linux-watch` | Creates socket directory under `/run/` |
 | `NoNewPrivileges=true` | Prevents privilege escalation |
 | `PrivateTmp=true` | Isolated `/tmp` |
 | `PrivateDevices=true` | No access to device nodes |
-| `ProtectSystem=strict` | Filesystem is read-only (except `/proc`, `/sys`) |
+| `ProtectSystem=strict` | Filesystem is read-only |
 | `ProtectHome=true` | No access to user home directories |
 | `ProtectKernelTunables=true` | Cannot modify kernel parameters |
 | `ProtectControlGroups=true` | Cannot modify cgroups |
-| `CapabilityBoundingSet=` | Zero Linux capabilities |
-| `RestrictAddressFamilies=AF_INET AF_INET6` | Only TCP/IP networking |
+| `CapabilityBoundingSet=CAP_BPF CAP_PERFMON` | Only BPF-related capabilities |
+| `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX` | TCP/IP + Unix sockets only |
 | `MemoryDenyWriteExecute=true` | No writable+executable memory |
 | `RestrictNamespaces=true` | Cannot create namespaces |
 | `LockPersonality=true` | Cannot change execution domain |
 | `SystemCallFilter=@system-service` | Syscall allowlist only |
+| `ReadOnlyPaths=/var/log` | Allows reading log files |
 
 ---
 
@@ -183,6 +239,9 @@ sudo systemctl disable --now azlo-linux-watch
 sudo rm /etc/systemd/system/azlo-linux-watch.service
 sudo rm -rf /opt/azlo-linux-watch
 sudo rm -rf /etc/azlo-linux-watch
+sudo rm -f /etc/pam.d/azlo-linux-watch
+# Remove PAM hook from sshd config
+sudo sed -i '/azlo-linux-watch/d' /etc/pam.d/sshd
 sudo userdel azlo-watch
 sudo systemctl daemon-reload
 ```

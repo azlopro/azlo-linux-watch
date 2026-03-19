@@ -19,6 +19,11 @@ if getent group utmp &>/dev/null; then
   usermod -aG utmp "${SERVICE_USER}" 2>/dev/null || true
 fi
 
+# Add to adm group so auth.log is readable
+if getent group adm &>/dev/null; then
+  usermod -aG adm "${SERVICE_USER}" 2>/dev/null || true
+fi
+
 # Ensure /opt directory exists
 mkdir -p /opt/azlo-linux-watch
 chown root:root /opt/azlo-linux-watch
@@ -28,6 +33,20 @@ chmod 755 /opt/azlo-linux-watch
 if [ -f /etc/azlo-linux-watch/env ]; then
   chown root:root /etc/azlo-linux-watch/env
   chmod 600 /etc/azlo-linux-watch/env
+fi
+
+# Ensure pam-notify.sh is executable
+if [ -f /opt/azlo-linux-watch/pam-notify.sh ]; then
+  chmod 755 /opt/azlo-linux-watch/pam-notify.sh
+fi
+
+# Install PAM hook for sshd if not already present
+if [ -d /etc/pam.d ] && [ -f /etc/pam.d/azlo-linux-watch ]; then
+  # Hook into sshd PAM config if not already done
+  if [ -f /etc/pam.d/sshd ] && ! grep -q 'azlo-linux-watch' /etc/pam.d/sshd 2>/dev/null; then
+    echo '# azlo-linux-watch instant login detection' >> /etc/pam.d/sshd
+    echo '@include azlo-linux-watch' >> /etc/pam.d/sshd
+  fi
 fi
 
 systemctl daemon-reload

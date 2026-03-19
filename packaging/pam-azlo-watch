@@ -1,0 +1,2 @@
+# azlo-linux-watch — notify on session open/close
+session optional pam_exec.so /opt/azlo-linux-watch/pam-notify.sh

@@ -4,8 +4,8 @@ platform: linux
 version: ${VERSION}
 maintainer: azlopro <noreply@github.com>
 description: |
-  Monitors Linux user logins and logouts, sending real-time
-  alerts to a Discord webhook via a hardened systemd service.
+  Monitors Linux security events and sends real-time alerts to Discord.
+  Features: auth.log parsing, IP geolocation, PAM hooks, eBPF tracing.
 homepage: https://github.com/azlopro/azlo-linux-watch
 license: MIT
 
@@ -30,6 +30,23 @@ contents:
     type: config|noreplace
     file_info:
       mode: 0600
+      owner: root
+      group: root
+
+  # PAM helper script
+  - src: pam-notify.sh
+    dst: /opt/azlo-linux-watch/pam-notify.sh
+    file_info:
+      mode: 0755
+      owner: root
+      group: root
+
+  # PAM configuration drop-in
+  - src: packaging/pam-azlo-watch
+    dst: /etc/pam.d/azlo-linux-watch
+    type: config|noreplace
+    file_info:
+      mode: 0644
       owner: root
       group: root
 

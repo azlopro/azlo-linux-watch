@@ -1,5 +1,5 @@
 [Unit]
-Description=azlo Linux Login Monitor
+Description=azlo Linux Security Monitor
 Documentation=https://github.com/azlopro/azlo-linux-watch
 After=network-online.target
 Wants=network-online.target
@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=simple
 User=azlo-watch
 Group=utmp
+SupplementaryGroups=adm
 EnvironmentFile=/etc/azlo-linux-watch/env
 ExecStart=/opt/azlo-linux-watch/azlo-linux-watch
 Restart=on-failure
@@ -15,6 +16,10 @@ RestartSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=azlo-linux-watch
+
+# Runtime directory for PAM Unix socket
+RuntimeDirectory=azlo-linux-watch
+RuntimeDirectoryMode=0755
 
 # Hardening
 NoNewPrivileges=true
@@ -25,15 +30,20 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_INET AF_INET6
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
-CapabilityBoundingSet=
-AmbientCapabilities=
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
+
+# Capabilities for eBPF tracing (only used if kernel supports BPF)
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON
+AmbientCapabilities=CAP_BPF CAP_PERFMON
+
+# Allow reading auth.log despite ProtectSystem=strict
+ReadOnlyPaths=/var/log
 
 [Install]
 WantedBy=multi-user.target
