@@ -21,6 +21,10 @@ SyslogIdentifier=azlo-linux-watch
 RuntimeDirectory=azlo-linux-watch
 RuntimeDirectoryMode=0755
 
+# State directory for persistent data (IP tracker)
+StateDirectory=azlo-linux-watch
+StateDirectoryMode=0755
+
 # Hardening
 NoNewPrivileges=true
 PrivateTmp=true

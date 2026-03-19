@@ -22,6 +22,10 @@ const (
 	EventSSHKey                          // auth.log: accepted publickey + fingerprint
 	EventSudo                            // auth.log: sudo command executed
 	EventSuAttempt                       // auth.log: su attempt
+	EventPasswordLogin                   // auth.log: accepted password login
+	EventNewIP                           // auth.log: login from previously unseen IP
+	EventSudoFailed                      // auth.log: failed sudo / not in sudoers
+	EventUserChange                      // auth.log: useradd/userdel/usermod/passwd
 	EventProcessSpawn                    // eBPF: execve traced
 	EventDaemonStarted                   // internal: service just started
 )
@@ -44,6 +48,14 @@ func (e EventType) String() string {
 		return "sudo"
 	case EventSuAttempt:
 		return "su_attempt"
+	case EventPasswordLogin:
+		return "password_login"
+	case EventNewIP:
+		return "new_ip"
+	case EventSudoFailed:
+		return "sudo_failed"
+	case EventUserChange:
+		return "user_change"
 	case EventProcessSpawn:
 		return "process_spawn"
 	case EventDaemonStarted:
@@ -117,6 +129,14 @@ func eventEmoji(t EventType) string {
 		return "🛡️"
 	case EventSuAttempt:
 		return "🔄"
+	case EventPasswordLogin:
+		return "🔓"
+	case EventNewIP:
+		return "🆕"
+	case EventSudoFailed:
+		return "⛔"
+	case EventUserChange:
+		return "👤"
 	case EventProcessSpawn:
 		return "🔍"
 	case EventDaemonStarted:
@@ -144,6 +164,14 @@ func eventColor(t EventType) int {
 		return 0x9B59B6 // purple
 	case EventSuAttempt:
 		return 0xF39C12 // gold
+	case EventPasswordLogin:
+		return 0x2ECC71 // green
+	case EventNewIP:
+		return 0xE67E22 // amber/orange
+	case EventSudoFailed:
+		return 0xE74C3C // red
+	case EventUserChange:
+		return 0x2C3E50 // dark blue
 	case EventProcessSpawn:
 		return 0x1ABC9C // teal
 	case EventDaemonStarted:
@@ -171,6 +199,14 @@ func eventTitle(t EventType) string {
 		return "Sudo Command Executed"
 	case EventSuAttempt:
 		return "Su Attempt"
+	case EventPasswordLogin:
+		return "Password Login"
+	case EventNewIP:
+		return "Login From New IP"
+	case EventSudoFailed:
+		return "Sudo Denied"
+	case EventUserChange:
+		return "User Account Changed"
 	case EventProcessSpawn:
 		return "Process Spawned"
 	case EventDaemonStarted:

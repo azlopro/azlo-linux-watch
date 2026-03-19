@@ -139,6 +139,46 @@ func TestParseAuthLogLine(t *testing.T) {
 			line:      "Mar 18 22:10:08 server CRON[9999]: pam_unix(cron:session): session opened for user root",
 			wantCount: 0,
 		},
+		{
+			name:      "accepted password",
+			line:      "Mar 18 22:10:09 server sshd[1234]: Accepted password for bob from 203.0.113.5 port 22 ssh2",
+			wantType:  EventPasswordLogin,
+			wantUser:  "bob",
+			wantIP:    "203.0.113.5",
+			wantCount: 1,
+		},
+		{
+			name:      "sudo not in sudoers",
+			line:      "Mar 18 22:10:10 server sudo: alice : user NOT in sudoers ; TTY=pts/0 ; PWD=/home/alice ; USER=root ; COMMAND=/usr/bin/su",
+			wantType:  EventSudoFailed,
+			wantUser:  "alice",
+			wantCount: 1,
+		},
+		{
+			name:      "sudo wrong password",
+			line:      "Mar 18 22:10:11 server sudo: bob : 3 incorrect password attempts ; TTY=pts/0 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/apt",
+			wantType:  EventSudoFailed,
+			wantUser:  "bob",
+			wantCount: 1,
+		},
+		{
+			name:      "useradd",
+			line:      "Mar 18 22:10:12 server useradd[5678]: new user: name=newguy, UID=1002, GID=1002",
+			wantType:  EventUserChange,
+			wantCount: 1,
+		},
+		{
+			name:      "userdel",
+			line:      "Mar 18 22:10:13 server userdel[5679]: delete user 'oldguy'",
+			wantType:  EventUserChange,
+			wantCount: 1,
+		},
+		{
+			name:      "passwd change",
+			line:      "Mar 18 22:10:14 server passwd[5680]: pam_unix(passwd:chauthtok): password changed for bob",
+			wantType:  EventUserChange,
+			wantCount: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -148,7 +188,7 @@ func TestParseAuthLogLine(t *testing.T) {
 				<-events
 			}
 
-			parseAuthLogLine(tt.line, events, brute)
+			parseAuthLogLine(tt.line, events, brute, nil)
 
 			if len(events) != tt.wantCount {
 				t.Fatalf("got %d events, want %d", len(events), tt.wantCount)
@@ -224,6 +264,7 @@ func TestEventTypes(t *testing.T) {
 	types := []EventType{
 		EventLogin, EventLogout, EventFailedLogin, EventInvalidUser,
 		EventBruteForce, EventSSHKey, EventSudo, EventSuAttempt,
+		EventPasswordLogin, EventNewIP, EventSudoFailed, EventUserChange,
 		EventProcessSpawn, EventDaemonStarted,
 	}
 	for _, et := range types {
@@ -237,5 +278,28 @@ func TestEventTypes(t *testing.T) {
 		if eventTitle(et) == "" {
 			t.Errorf("event type %s has no title", et)
 		}
+	}
+}
+
+func TestIPTracker(t *testing.T) {
+	tracker := NewIPTracker()
+
+	if !tracker.Record("bob", "1.2.3.4") {
+		t.Error("first IP should be flagged as new")
+	}
+	if tracker.Record("bob", "1.2.3.4") {
+		t.Error("same IP should not be flagged as new again")
+	}
+	if !tracker.Record("bob", "5.6.7.8") {
+		t.Error("different IP should be flagged as new")
+	}
+	if !tracker.Record("alice", "1.2.3.4") {
+		t.Error("same IP for different user should be flagged as new")
+	}
+	if tracker.Record("", "1.2.3.4") {
+		t.Error("empty user should not be flagged")
+	}
+	if tracker.Record("bob", "") {
+		t.Error("empty IP should not be flagged")
 	}
 }

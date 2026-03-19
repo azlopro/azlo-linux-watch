@@ -48,6 +48,46 @@ var (
 	reSuFailure = regexp.MustCompile(
 		`pam_unix\(su(?::\w+)?\): authentication failure;.*\buser=(\S+)`,
 	)
+
+	// Accepted password for bob from 192.168.1.1 port 22 ssh2
+	reAcceptedPassword = regexp.MustCompile(
+		`Accepted password for (\S+) from (\S+) port (\d+)`,
+	)
+
+	// bob : user NOT in sudoers ; TTY=pts/0 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/su
+	reSudoNotInSudoers = regexp.MustCompile(
+		`(\S+) : user NOT in sudoers ; TTY=(\S+) ; PWD=(\S+) ; USER=(\S+) ; COMMAND=(.+)`,
+	)
+
+	// bob : 3 incorrect password attempts ; TTY=pts/0 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/su
+	reSudoWrongPassword = regexp.MustCompile(
+		`(\S+) : (\d+) incorrect password attempt`,
+	)
+
+	// useradd[1234]: new user: name=bob, UID=1001, ...
+	reUserAdd = regexp.MustCompile(
+		`useradd\[\d+\]: new user: name=(\S+)`,
+	)
+
+	// userdel[1234]: delete user 'bob'
+	reUserDel = regexp.MustCompile(
+		`userdel\[\d+\]: delete user '(\S+)'`,
+	)
+
+	// usermod[1234]: change user 'bob' ...
+	reUserMod = regexp.MustCompile(
+		`usermod\[\d+\]: change user '(\S+)'`,
+	)
+
+	// passwd[1234]: pam_unix(passwd:chauthtok): password changed for bob
+	rePasswdChange = regexp.MustCompile(
+		`passwd\[\d+\]:.*password changed for (\S+)`,
+	)
+
+	// groupadd[1234]: new group: name=docker, GID=999
+	reGroupAdd = regexp.MustCompile(
+		`groupadd\[\d+\]: new group: name=(\S+)`,
+	)
 )
 
 // ─── Brute-force detector ───────────────────────────────────────────────────
@@ -125,16 +165,17 @@ func watchAuthLog(events chan<- SecurityEvent) {
 
 	log.Printf("[authlog] tailing %s", path)
 	brute := newBruteForceDetector()
+	ipTracker := NewIPTracker()
 
 	for {
-		if err := tailAuthLog(path, events, brute); err != nil {
+		if err := tailAuthLog(path, events, brute, ipTracker); err != nil {
 			log.Printf("[authlog] error: %v — retrying in 5s", err)
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func tailAuthLog(path string, events chan<- SecurityEvent, brute *bruteForceDetector) error {
+func tailAuthLog(path string, events chan<- SecurityEvent, brute *bruteForceDetector, ipTracker *IPTracker) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
@@ -152,7 +193,7 @@ func tailAuthLog(path string, events chan<- SecurityEvent, brute *bruteForceDete
 	for {
 		for scanner.Scan() {
 			line := scanner.Text()
-			parseAuthLogLine(line, events, brute)
+			parseAuthLogLine(line, events, brute, ipTracker)
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -181,7 +222,7 @@ func tailAuthLog(path string, events chan<- SecurityEvent, brute *bruteForceDete
 }
 
 // parseAuthLogLine matches a single auth.log line against known patterns.
-func parseAuthLogLine(line string, events chan<- SecurityEvent, brute *bruteForceDetector) {
+func parseAuthLogLine(line string, events chan<- SecurityEvent, brute *bruteForceDetector, ipTracker *IPTracker) {
 	now := time.Now()
 
 	// ── Failed password for invalid user ─────────────────────────────────
@@ -271,6 +312,49 @@ func parseAuthLogLine(line string, events chan<- SecurityEvent, brute *bruteForc
 			Timestamp: now,
 			Source:    "authlog",
 		}
+
+		// Check for new IP
+		if ipTracker != nil && ip != "" {
+			if isNew := ipTracker.Record(user, ip); isNew {
+				events <- SecurityEvent{
+					Type:      EventNewIP,
+					User:      user,
+					SourceIP:  ip,
+					Details:   fmt.Sprintf("First login from `%s` for user `%s`", ip, user),
+					Timestamp: now,
+					Source:    "authlog",
+				}
+			}
+		}
+		return
+	}
+
+	// ── Accepted password ───────────────────────────────────────────────
+	if m := reAcceptedPassword.FindStringSubmatch(line); m != nil {
+		user, ip := m[1], m[2]
+
+		events <- SecurityEvent{
+			Type:      EventPasswordLogin,
+			User:      user,
+			SourceIP:  ip,
+			Details:   fmt.Sprintf("Password login for `%s` from %s", user, ip),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+
+		// Check for new IP
+		if ipTracker != nil && ip != "" {
+			if isNew := ipTracker.Record(user, ip); isNew {
+				events <- SecurityEvent{
+					Type:      EventNewIP,
+					User:      user,
+					SourceIP:  ip,
+					Details:   fmt.Sprintf("First login from `%s` for user `%s`", ip, user),
+					Timestamp: now,
+					Source:    "authlog",
+				}
+			}
+		}
 		return
 	}
 
@@ -315,6 +399,90 @@ func parseAuthLogLine(line string, events chan<- SecurityEvent, brute *bruteForc
 			Type:      EventSuAttempt,
 			User:      user,
 			Details:   fmt.Sprintf("Failed `su` attempt by `%s`", user),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── sudo: user NOT in sudoers ────────────────────────────────────────
+	if m := reSudoNotInSudoers.FindStringSubmatch(line); m != nil {
+		user, tty, command := m[1], m[2], m[5]
+
+		events <- SecurityEvent{
+			Type:      EventSudoFailed,
+			User:      user,
+			TTY:       tty,
+			Details:   fmt.Sprintf("User `%s` is NOT in sudoers\n```\n%s\n```", user, strings.TrimSpace(command)),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── sudo: incorrect password ─────────────────────────────────────────
+	if m := reSudoWrongPassword.FindStringSubmatch(line); m != nil {
+		user, attempts := m[1], m[2]
+
+		events <- SecurityEvent{
+			Type:      EventSudoFailed,
+			User:      user,
+			Details:   fmt.Sprintf("`%s` entered %s incorrect sudo password attempts", user, attempts),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── useradd ─────────────────────────────────────────────────────────
+	if m := reUserAdd.FindStringSubmatch(line); m != nil {
+		events <- SecurityEvent{
+			Type:      EventUserChange,
+			Details:   fmt.Sprintf("New user created: `%s`", m[1]),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── userdel ─────────────────────────────────────────────────────────
+	if m := reUserDel.FindStringSubmatch(line); m != nil {
+		events <- SecurityEvent{
+			Type:      EventUserChange,
+			Details:   fmt.Sprintf("User deleted: `%s`", m[1]),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── usermod ─────────────────────────────────────────────────────────
+	if m := reUserMod.FindStringSubmatch(line); m != nil {
+		events <- SecurityEvent{
+			Type:      EventUserChange,
+			Details:   fmt.Sprintf("User modified: `%s`", m[1]),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── passwd ──────────────────────────────────────────────────────────
+	if m := rePasswdChange.FindStringSubmatch(line); m != nil {
+		events <- SecurityEvent{
+			Type:      EventUserChange,
+			Details:   fmt.Sprintf("Password changed for user: `%s`", m[1]),
+			Timestamp: now,
+			Source:    "authlog",
+		}
+		return
+	}
+
+	// ── groupadd ────────────────────────────────────────────────────────
+	if m := reGroupAdd.FindStringSubmatch(line); m != nil {
+		events <- SecurityEvent{
+			Type:      EventUserChange,
+			Details:   fmt.Sprintf("New group created: `%s`", m[1]),
 			Timestamp: now,
 			Source:    "authlog",
 		}
