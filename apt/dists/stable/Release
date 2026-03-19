@@ -1,0 +1,32 @@
+Origin: azlopro
+Label: azlo-linux-watch
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: azlo-linux-watch APT repository
+Date: Thu, 19 Mar 2026 06:39:13 +0000
+MD5Sum:
+ e6902b754f54ff045e6a5f6f02860ce3              198 Release
+ b6883561fd303f9a3a80bab25a7f60ff              580 main/binary-amd64/Packages
+ a602c80a31daba3e010765fbcfb5f51b              427 main/binary-amd64/Packages.gz
+ 439148c9fe96c58126133bcdede6d1e2              580 main/binary-arm64/Packages
+ 3ed6146004f235b6894d1fa1c829e322              428 main/binary-arm64/Packages.gz
+SHA1:
+ 4f16523d1375b2f2e3b1477bbb6d9549250ad916              198 Release
+ 06f57f01d75c2657a8dacb98a35158d09dcf2e6a              580 main/binary-amd64/Packages
+ a0475c6b20262e1e87bf1967a2247c5843cb6c9c              427 main/binary-amd64/Packages.gz
+ c1c6291d9afffcacdee024a6132208669cd3b92f              580 main/binary-arm64/Packages
+ d4b84cec43eca1897ce4d2677e309c52386397da              428 main/binary-arm64/Packages.gz
+SHA256:
+ 8af412661588bde009752a281c40c8e10b6bcdf81a2801becb6a5b2e5b8ad4de              198 Release
+ 5d8ac7897b5a81ef966c90e55ea10ae5fd580bf4f8c5c08ce053c5abcf438620              580 main/binary-amd64/Packages
+ 42583999ddccd303c3fae6132901fbdf81549bd8f6fe197b69873109dd88ae24              427 main/binary-amd64/Packages.gz
+ 773523f60a304ac9ffe5c976cfde699eb67f81a7a4ddecd67543b2534a9cb28e              580 main/binary-arm64/Packages
+ d625478e8562f207c3ca71b50cdc98d1b9694a8bb64144d76bf7d150a311c5d9              428 main/binary-arm64/Packages.gz
+SHA512:
+ 31e52eacd287758b1fa426ecd7907e8d793a6e9ba0dd9b4afe1153712abe6d87286d2ae03d29d9966a4f3622eb28b264ed3500ac08849bf12dc01813b74c2ae3              198 Release
+ 113136295dce2b0e213e446bc259652e087e2b367b3073e88b7ec48bb76a297912c641722333cb20be800cc05ad49810eb62d867ab402209f46fa240441bb7b3              580 main/binary-amd64/Packages
+ 9993d6191af6b34e12cb9fdb2b6a712698107ffebdeb28de93f6192eb3f6874164e556d749ca0470626120134d64b06677cbe557171aa09b6fc4e6de44fa382a              427 main/binary-amd64/Packages.gz
+ b7364be780a431e4e2e09654614e8af63d3f6effba57269ac3e29e5387fd5ceb494b1477f22314bf85c7d94f4cdf20286558304a0d7d8e1ba860cb43ec10be82              580 main/binary-arm64/Packages
+ 38d83b792cb7d177e7f53fc91be3c086198ed0a2d69d498c6f7bac19ac151297e9a0f835f49bff750c61c7ae5b2b18e186e3d8d9d5e0dec7fdd3056b309842e2              428 main/binary-arm64/Packages.gz

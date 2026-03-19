@@ -1,0 +1,15 @@
+Package: azlo-linux-watch
+Version: 1.4.1
+Architecture: amd64
+Maintainer: azlopro <noreply@github.com>
+Installed-Size: 6515
+Filename: pool/azlo-linux-watch_v1.4.1_linux_amd64.deb
+Size: 2835618
+MD5sum: 35908a06555a685d2bbf5e2d9a53394b
+SHA1: 9795c5a8434085a8b82e4ecbe957d00bfec6cc7e
+SHA256: 8cf2f2bfaa8eae92de79b47cbf493a9a9ad80f38a7eeaf3d0cbb7fbd725c0117
+Priority: optional
+Homepage: https://github.com/azlopro/azlo-linux-watch
+Description: Monitors Linux security events and sends real-time alerts to Discord.
+ Features: auth.log parsing, IP geolocation, PAM hooks, eBPF tracing.
+
