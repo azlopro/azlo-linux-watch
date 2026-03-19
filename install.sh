@@ -218,6 +218,20 @@ case "${PKGMGR}" in
     ;;
 esac
 
+# ── register APT source for automatic updates (Debian/Ubuntu only) ────────
+if [ "${PKGMGR}" = "apt" ]; then
+  APT_SOURCE="/etc/apt/sources.list.d/azlo-linux-watch.list"
+  APT_REPO_URL="https://azlopro.github.io/azlo-linux-watch/apt"
+  if [ ! -f "${APT_SOURCE}" ]; then
+    info "Adding APT repository for automatic updates"
+    echo "deb [trusted=yes] ${APT_REPO_URL} stable main" > "${APT_SOURCE}"
+    info "APT source added: ${APT_SOURCE}"
+    info "Future updates: sudo apt update && sudo apt upgrade azlo-linux-watch"
+  else
+    info "APT source already configured at ${APT_SOURCE}"
+  fi
+fi
+
 # ── configure webhook (package postinstall may have created the template) ─────
 configure_webhook
 

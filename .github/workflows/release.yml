@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 jobs:
   build-and-release:
@@ -82,3 +83,50 @@ jobs:
             azlo-linux-watch_${{ github.ref_name }}_linux_arm64.pkg.tar.zst
             checksums.txt
           generate_release_notes: true
+
+      # ── Publish APT repository to GitHub Pages ─────────────────────────
+      - name: Build APT repository
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y dpkg-dev
+
+          # Create repo structure
+          mkdir -p apt-repo/pool apt-repo/dists/stable/main/binary-amd64 apt-repo/dists/stable/main/binary-arm64
+
+          # Copy .deb files
+          cp "azlo-linux-watch_${VERSION}_linux_amd64.deb" apt-repo/pool/
+          cp "azlo-linux-watch_${VERSION}_linux_arm64.deb" apt-repo/pool/
+
+          # Generate Packages files
+          cd apt-repo
+          dpkg-scanpackages --arch amd64 pool > dists/stable/main/binary-amd64/Packages
+          dpkg-scanpackages --arch arm64 pool > dists/stable/main/binary-arm64/Packages
+          gzip -k dists/stable/main/binary-amd64/Packages
+          gzip -k dists/stable/main/binary-arm64/Packages
+
+          # Generate Release file
+          cd dists/stable
+          cat > Release <<EOF
+          Origin: azlopro
+          Label: azlo-linux-watch
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: azlo-linux-watch APT repository
+          EOF
+          # Remove leading spaces from heredoc
+          sed -i 's/^          //' Release
+
+          # Add checksums to Release
+          apt-ftparchive release . >> Release
+          cd ../../..
+
+      - name: Deploy APT repo to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apt-repo
+          destination_dir: apt
+          keep_files: true

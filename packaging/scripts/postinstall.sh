@@ -49,6 +49,12 @@ if [ -d /etc/pam.d ] && [ -f /etc/pam.d/azlo-linux-watch ]; then
   fi
 fi
 
+# Register APT repository for automatic updates (Debian/Ubuntu only)
+APT_SOURCE="/etc/apt/sources.list.d/azlo-linux-watch.list"
+if command -v apt &>/dev/null && [ ! -f "${APT_SOURCE}" ]; then
+  echo "deb [trusted=yes] https://azlopro.github.io/azlo-linux-watch/apt stable main" > "${APT_SOURCE}"
+fi
+
 systemctl daemon-reload
 systemctl enable azlo-linux-watch
 
